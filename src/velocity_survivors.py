@@ -5,7 +5,11 @@ import random
 
 
 def reset():
-    global hero, hero_book, enemies, arena_width, arena_height, hero_hp, hero_book
+    global game_paused, lvling_up, hero, hero_book, available_upgrades, enemies, \
+        arena_width, arena_height
+
+    game_paused = False
+    lvling_up = False
 
     current_seed = 1
     random.seed(current_seed)
@@ -32,6 +36,21 @@ def reset():
         'x': hero['x'] + 35 * math.cos(0),
         'y': hero['y'] + 35 * math.sin(0)
     }
+
+    available_upgrades = [
+        {
+            'name': 'speed +5%',
+            'subject': 'hero',
+            'feature': 'speed',
+            'coeff': 1.05
+        },
+        {
+            'name': 'dmg +5%',
+            'subject': 'hero_book',
+            'feature': 'dmg',
+            'coeff': 1.05
+        }
+    ]
 
     enemies = []
     enemy_type1 = {
@@ -87,6 +106,9 @@ def check_collision(obj1, obj2):
 
 
 def lvl_up():
+    global game_paused, lvling_up
+    game_paused = True
+    lvling_up = True
     hero['lvl'] += 1
     hero['xp'] -= hero['xp_in_lvl']
 
@@ -96,43 +118,63 @@ def check_xp():
         lvl_up()
 
 
+def apply_upgrade(upgrade):
+    global game_paused, lvling_up
+    if upgrade['subject'] == 'hero':
+        hero[upgrade['feature']] *= upgrade['coeff']
+    elif upgrade['subject'] == 'hero_book':
+        hero_book[upgrade['feature']] *= upgrade['coeff']
+    lvling_up = False
+    game_paused = False
+
+
 def update():
-    global hero, hero_book, enemies
+    global game_paused, hero, hero_book, enemies
 
     if keyboard.r:
         reset()
 
-    if keyboard.left:
-        hero['x'] -= hero['speed']
+    if keyboard.p:
+        game_paused = not game_paused
 
-    if keyboard.right:
-        hero['x'] += hero['speed']
+    if not game_paused:
+        if keyboard.left:
+            hero['x'] -= hero['speed']
 
-    if keyboard.up:
-        hero['y'] -= hero['speed']
+        if keyboard.right:
+            hero['x'] += hero['speed']
 
-    if keyboard.down:
-        hero['y'] += hero['speed']
+        if keyboard.up:
+            hero['y'] -= hero['speed']
 
-    for enemy in enemies:
-        if check_collision(hero, enemy):
-            hero['hp'] -= enemy['dmg']
-        if check_collision(hero_book, enemy):
-            enemy['hp'] -= hero_book['dmg']
-        if enemy['hp'] <= 0:
-            enemies.remove(enemy)
-            hero['xp'] += enemy['gives_xp']
-        move_towards_player(enemy, hero)
+        if keyboard.down:
+            hero['y'] += hero['speed']
 
-    check_xp()
+        for enemy in enemies:
+            if check_collision(hero, enemy):
+                hero['hp'] -= enemy['dmg']
+            if check_collision(hero_book, enemy):
+                enemy['hp'] -= hero_book['dmg']
+            if enemy['hp'] <= 0:
+                enemies.remove(enemy)
+                hero['xp'] += enemy['gives_xp']
+            move_towards_player(enemy, hero)
 
-    hero_book['angle'] += 0.1
-    hero_book['x'] = hero['x'] + hero_book['orbit_radius'] * math.cos(hero_book['angle'])
-    hero_book['y'] = hero['y'] + hero_book['orbit_radius'] * math.sin(hero_book['angle'])
+        check_xp()
+
+        hero_book['angle'] += 0.1
+        hero_book['x'] = hero['x'] + hero_book['orbit_radius'] * math.cos(hero_book['angle'])
+        hero_book['y'] = hero['y'] + hero_book['orbit_radius'] * math.sin(hero_book['angle'])
+
+    if lvling_up:
+        if keyboard.k_1:
+            apply_upgrade(available_upgrades[0])
+        elif keyboard.k_2:
+            apply_upgrade(available_upgrades[1])
 
 
 def draw():
-    global arena_height
+    global arena_height, lvling_up, available_upgrades
 
     screen.fill(color='black')
 
@@ -141,7 +183,7 @@ def draw():
             (enemy['x'], enemy['y']), enemy['radius'], color='red'
         )
         screen.draw.text(
-            f'HP: {enemy["hp"]}',
+            f'HP: {math.ceil(enemy["hp"])}',
             (enemy['x'] - 18, enemy['y'] - enemy['radius'] - 10),
             fontsize=16,
             color='salmon'
@@ -163,11 +205,27 @@ def draw():
     )
 
     screen.draw.text(
-        f'LVL: {hero["lvl"]}\nXP: {hero["xp"]}',
+        f'LVL: {hero["lvl"]}\nXP: {hero["xp"]}\nDMG: {round(hero_book["dmg"], 2)}\nSPD: {round(hero["speed"], 2)}',
         (4, 4),
         fontsize=16,
         color='green'
     )
+
+    if lvling_up:
+        screen.fill(color='black')
+        screen.draw.text(
+            'LVL UP!\nChoose an upgrade',
+            (arena_width / 2 - 32, arena_height / 2 - 16),
+            fontsize=32,
+            color='blue'
+        )
+        for i in range(2):
+            screen.draw.text(
+                f'{i + 1} = {available_upgrades[i]["name"]}',
+                (arena_width / 2 - 32, arena_height / 2 - 16 + 64 + i * 32),
+                fontsize=32,
+                color='blue'
+            )
 
     if hero['hp'] <= 0:
         screen.fill(color='black')
