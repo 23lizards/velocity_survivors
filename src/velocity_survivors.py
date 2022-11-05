@@ -5,14 +5,15 @@ import random
 
 
 def reset():
-    global game_paused, lvling_up, hero, hero_book, available_upgrades, enemies, \
-        arena_width, arena_height
-
-    game_paused = False
-    lvling_up = False
+    global game_paused, lvling_up, selected_upgrade, hero, hero_book, available_upgrades, enemies, \
+        arena_width, arena_height, game_state, RUNNING, PAUSED, LVLING_UP, UPGRADE_SELECTED
 
     current_seed = 1
     random.seed(current_seed)
+
+    RUNNING, PAUSED, LVLING_UP, UPGRADE_SELECTED = 0, 1, 2, 3
+    game_state = RUNNING
+    selected_upgrade = -1
 
     arena_width = 800
     arena_height = 600
@@ -93,7 +94,6 @@ def move_towards_player(enemy, hero):
     dir_vect.normalize()
     # Move along this normalized vector towards the player at current speed.
     dir_vect.scale_to_length(enemy['speed'])
-    # enemy.rect.move_ip(dir_vect)
     enemy['x'] += dir_vect.x
     enemy['y'] += dir_vect.y
 
@@ -106,9 +106,8 @@ def check_collision(obj1, obj2):
 
 
 def lvl_up():
-    global game_paused, lvling_up
-    game_paused = True
-    lvling_up = True
+    global game_state, LVLING_UP
+    game_state = LVLING_UP
     hero['lvl'] += 1
     hero['xp'] -= hero['xp_in_lvl']
 
@@ -119,25 +118,29 @@ def check_xp():
 
 
 def apply_upgrade(upgrade):
-    global game_paused, lvling_up
+    global game_state, RUNNING, selected_upgrade
     if upgrade['subject'] == 'hero':
         hero[upgrade['feature']] *= upgrade['coeff']
     elif upgrade['subject'] == 'hero_book':
         hero_book[upgrade['feature']] *= upgrade['coeff']
-    lvling_up = False
-    game_paused = False
+    pygame.time.delay(2000)
+    game_state = RUNNING
+    selected_upgrade = -1
 
 
 def update():
-    global game_paused, hero, hero_book, enemies
+    global game_state, PAUSED, LVLING_UP, UPGRADE_SELECTED, selected_upgrade, hero, hero_book, enemies
 
     if keyboard.r:
         reset()
 
     if keyboard.p:
-        game_paused = not game_paused
+        if game_state == RUNNING:
+            game_state = PAUSED
+        elif game_state == PAUSED:
+            game_state = RUNNING
 
-    if not game_paused:
+    if game_state == RUNNING:
         if keyboard.left:
             hero['x'] -= hero['speed']
 
@@ -165,45 +168,20 @@ def update():
         hero_book['angle'] += 0.1
         hero_book['x'] = hero['x'] + hero_book['orbit_radius'] * math.cos(hero_book['angle'])
         hero_book['y'] = hero['y'] + hero_book['orbit_radius'] * math.sin(hero_book['angle'])
-
-    if lvling_up:
+    elif game_state == LVLING_UP:
         if keyboard.k_1:
-            apply_upgrade(available_upgrades[0])
+            selected_upgrade = 0
+            game_state = UPGRADE_SELECTED
+            print(f'{game_state=}; {selected_upgrade=}')
         elif keyboard.k_2:
-            apply_upgrade(available_upgrades[1])
+            selected_upgrade = 1
+            game_state = UPGRADE_SELECTED
+            print(f'{game_state=}; {selected_upgrade=}')
+    elif game_state == UPGRADE_SELECTED:
+        apply_upgrade(available_upgrades[selected_upgrade])
 
 
-def draw():
-    global arena_height, lvling_up, available_upgrades
-
-    screen.fill(color='black')
-
-    for enemy in enemies:
-        screen.draw.filled_circle(
-            (enemy['x'], enemy['y']), enemy['radius'], color='red'
-        )
-        screen.draw.text(
-            f'HP: {math.ceil(enemy["hp"])}',
-            (enemy['x'] - 18, enemy['y'] - enemy['radius'] - 10),
-            fontsize=16,
-            color='salmon'
-        )
-
-    screen.draw.filled_circle(
-        (hero['x'], hero['y']), hero['radius'], color='blue'
-    )
-    
-    screen.draw.filled_circle(
-        (hero_book['x'], hero_book['y']), hero_book['radius'], color='cyan'
-    )
-
-    screen.draw.text(
-        f'HP: {hero["hp"]}',
-        (hero['x'] - 18, hero['y'] - 30),
-        fontsize=16,
-        color='green'
-    )
-
+def display_hero_stats():
     screen.draw.text(
         f'LVL: {hero["lvl"]}\nXP: {hero["xp"]}\nDMG: {round(hero_book["dmg"], 2)}\nSPD: {round(hero["speed"], 2)}',
         (4, 4),
@@ -211,7 +189,41 @@ def draw():
         color='green'
     )
 
-    if lvling_up:
+
+def draw():
+    global arena_height, game_state, RUNNING, PAUSED, LVLING_UP, UPGRADE_SELECTED, available_upgrades, selected_upgrade
+
+    if game_state == RUNNING:
+        screen.fill(color='black')
+
+        for enemy in enemies:
+            screen.draw.filled_circle(
+                (enemy['x'], enemy['y']), enemy['radius'], color='red'
+            )
+            screen.draw.text(
+                f'HP: {math.ceil(enemy["hp"])}',
+                (enemy['x'] - 18, enemy['y'] - enemy['radius'] - 10),
+                fontsize=16,
+                color='salmon'
+            )
+
+        screen.draw.filled_circle(
+            (hero['x'], hero['y']), hero['radius'], color='blue'
+        )
+
+        screen.draw.filled_circle(
+            (hero_book['x'], hero_book['y']), hero_book['radius'], color='cyan'
+        )
+
+        screen.draw.text(
+            f'HP: {hero["hp"]}',
+            (hero['x'] - 18, hero['y'] - 30),
+            fontsize=16,
+            color='green'
+        )
+
+        display_hero_stats()
+    elif game_state == LVLING_UP:
         screen.fill(color='black')
         screen.draw.text(
             'LVL UP!\nChoose an upgrade',
@@ -222,10 +234,20 @@ def draw():
         for i in range(2):
             screen.draw.text(
                 f'{i + 1} = {available_upgrades[i]["name"]}',
-                (arena_width / 2 - 32, arena_height / 2 - 16 + 64 + i * 32),
+                (arena_width / 2 - 32, arena_height / 2 + 48 + i * 32),
                 fontsize=32,
                 color='blue'
             )
+        display_hero_stats()
+    elif game_state == UPGRADE_SELECTED:
+        if selected_upgrade != -1:
+            screen.draw.text(
+                f'{selected_upgrade + 1} = {available_upgrades[selected_upgrade]["name"]}',
+                (arena_width / 2 - 32, arena_height / 2 + 48 + selected_upgrade * 32),
+                fontsize=32,
+                color='cyan'
+            )
+        display_hero_stats()
 
     if hero['hp'] <= 0:
         screen.fill(color='black')
